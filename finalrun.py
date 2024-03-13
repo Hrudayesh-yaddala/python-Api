@@ -3,6 +3,7 @@ from flask_cors import CORS
 import assemblyai as aai
 # from summarydepend import *;
 from translate import Translator
+import fitz
 
 app = Flask(__name__)
 CORS(app)
@@ -136,16 +137,33 @@ def detect_text(image_blob):
 @app.route('/ocr', methods=['POST'])
 def ocr():
     try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image part in the request.'}), 400
-
-        image_blob = request.files['image'].read()
-
-        ocr_result = detect_text(image_blob)
-
-        return jsonify({'ocr_text': ocr_result[0]})
+        if 'image' in request.files:
+            # Handle image file
+            image_blob = request.files['image'].read()
+            ocr_result = detect_text(image_blob)
+            return jsonify({'ocr_text': ocr_result[0]})
+        
+        elif 'pdf' in request.files:
+            # Handle PDF file
+            pdf_blob = request.files['pdf'].read()
+            images = []
+            with fitz.open(stream=pdf_blob, filetype="pdf") as pdf:
+                for page_num in range(len(pdf)):
+                    page = pdf.load_page(page_num)
+                    # Convert PDF page to image blob
+                    image_bytes = page.get_pixmap().tobytes()
+                    images.append(image_bytes)
+            
+            # Process OCR for each image blob
+            ocr_texts = [detect_text(image) for image in images]
+            return jsonify({'ocr_texts': ocr_texts})
+        
+        else:
+            return jsonify({'error': 'No supported file part in the request.'}), 400
+    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+        
 
 # if _name_ == '_main_':
 #     app.run(debug=True, port=6000)
