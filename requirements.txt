@@ -3,3 +3,4 @@ Flask==3.0.2
 Flask-Cors==4.0.0
 google-cloud-vision==3.7.0
 translate==3.6.1
+PyMuPDF==1.23.26
