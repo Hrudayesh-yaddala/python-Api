@@ -1,6 +1,8 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request,send_file
 from flask_cors import CORS
 import assemblyai as aai
+import pdfplumber
+from gtts import gTTS
 # from summarydepend import *;
 from translate import Translator
 
@@ -18,7 +20,7 @@ def getrequest():
 def audio_transcribe():
     try:
         print("entered")
-        audio_file = request.files['audioFile'] 
+        audio_file = request.files['audioFile']
         print(audio_file)
         # Save the file temporarily if needed
         audio_file_path = 'temp_audio.wav'
@@ -34,6 +36,43 @@ def audio_transcribe():
         return jsonify({'error': str(e)}), 500
 
 
+
+def extract_text_from_pdfplumber(pdf_path):
+    text = ""
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_number in range(len(pdf.pages)):
+            page = pdf.pages[page_number]
+            text += page.extract_text()
+    return text
+
+
+def text_to_speech(text, language, filename):
+    tts = gTTS(text=text, lang=language, slow=False)
+    tts.save(filename)
+
+
+@app.route('/text-to-speech', methods=['POST'])
+def voiceGeneration():
+    try:
+        print("entered to module")
+        input_type = request.form['input_type']
+        print(input_type)
+        if input_type == 'text':
+            inp_text = request.form['input_text']
+            print(inp_text)
+            text_to_speech(inp_text, 'en', 'testing-speech.wav')
+        else:
+            input_file = request.files['input_document']
+            extracted_text = extract_text_from_pdfplumber(input_file)
+            print(extracted_text)
+            text_to_speech(extracted_text, 'en', 'testing-speech.wav')
+
+        return send_file('testing-speech.wav', as_attachment=True,mimetype='audio/mpeg')
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def conversion(input_text, target_language):
     translator = Translator(to_lang=target_language)
     result = translator.translate(input_text)
@@ -42,18 +81,26 @@ def conversion(input_text, target_language):
 @app.route('/translate', methods=['POST'])
 def translate_text():
     try:
-        print("entered")
-        data = request.get_json()
-        print(data)
+        print("entered to lang-translation")
+        input_type=request.form['input_type']
+        target_lang=request.form['input_language']
+      
+        # print(request.form['text'])
+        print(target_lang,"printing target lang")
+       
+        if (input_type == 'text'):
+            print("sucesss")
+            text=request.form['input_text']
+           
 
-        if 'text' not in data or 'target_language' not in data:
-            return jsonify({'error': 'Invalid input. Please provide both "text" and "target_lang" parameters.'}), 400
-
-        text = data['text']
-        target_lang = data['target_language']
-
+        else:
+            input_file=request.files['input_document']
+            text=extract_text_from_pdfplumber(input_file)
+            
+        print(text)    
         translated_text = conversion(text, target_lang)
-        print(translate_text)
+
+        print(translated_text)
         return jsonify({'translated_text': translated_text})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -105,15 +152,19 @@ def translate_text():
 
 
 # from flask import Flask, request, jsonify
+    
 from google.cloud import vision
 import os
 import math
 from collections import Counter
 import re
-# packages
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'nth-bucksaw-411711-9272bdfb012d.json'
+# client = vision.ImageAnnotatorClient(
+#     client_options={"api_key": None, "credentials_file": "nth-bucksaw-411711-9272bdfb012d.json"}
+# )
 # app = Flask(_name_)
+
 
 def detect_text(image_blob):
     """Detects text in the blob."""
@@ -150,6 +201,8 @@ def ocr():
 # if _name_ == '_main_':
 #     app.run(debug=True, port=6000)
 
+if __name__ == '__main__':
+    app.run(debug=True)
 
 
 
@@ -157,15 +210,3 @@ def ocr():
 
 
 
-# from translate import Translator
-
-# def conversion(input_text, target_language):
-#   translator = Translator(to_lang = target_language)
-#   result = translator.translate(input_text)
-#   return result
-
-# if __name__ == '__main__':
-#   text = input("Enter the text: ")
-#   target_lang = input("Enter your target language: ")
-#   translated_text = conversion(text, target_lang)
-#   print(translated_text)
