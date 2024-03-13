@@ -20,6 +20,7 @@ def getrequest():
 @app.route('/audio-transcribe', methods=['POST'])
 def audio_transcribe():
     try:
+        
         # print("entered")
         audio_file = request.files['audioFile']
         print(audio_file)
