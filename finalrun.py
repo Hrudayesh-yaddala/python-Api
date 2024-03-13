@@ -20,7 +20,7 @@ def getrequest():
 @app.route('/audio-transcribe', methods=['POST'])
 def audio_transcribe():
     try:
-        print("entered")
+        # print("entered")
         audio_file = request.files['audioFile']
         print(audio_file)
         # Save the file temporarily if needed
@@ -153,19 +153,16 @@ def translate_text():
 
 
 # from flask import Flask, request, jsonify
-    
 from google.cloud import vision
+# import fitz
 import os
 import math
 from collections import Counter
 import re
+# packages
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'nth-bucksaw-411711-9272bdfb012d.json'
-# client = vision.ImageAnnotatorClient(
-#     client_options={"api_key": None, "credentials_file": "nth-bucksaw-411711-9272bdfb012d.json"}
-# )
 # app = Flask(_name_)
-
 
 def detect_text(image_blob):
     """Detects text in the blob."""
