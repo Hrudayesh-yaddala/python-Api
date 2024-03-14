@@ -5,7 +5,9 @@ import pdfplumber
 from gtts import gTTS
 # from summarydepend import *;
 from translate import Translator
-import fitz
+# import fitz
+import torch
+from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 
 app = Flask(__name__)
 CORS(app)
@@ -20,7 +22,6 @@ def getrequest():
 @app.route('/audio-transcribe', methods=['POST'])
 def audio_transcribe():
     try:
-        
         # print("entered")
         audio_file = request.files['audioFile']
         print(audio_file)
@@ -83,6 +84,7 @@ def conversion(input_text, target_language):
 @app.route('/translate', methods=['POST'])
 def translate_text():
     try:
+        text=''
         print("entered to lang-translation")
         input_type=request.form['input_type']
         target_lang=request.form['input_language']
@@ -91,7 +93,6 @@ def translate_text():
         print(target_lang,"printing target lang")
        
         if (input_type == 'text'):
-            print("sucesss")
             text=request.form['input_text']
            
 
@@ -106,6 +107,72 @@ def translate_text():
         return jsonify({'translated_text': translated_text})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+model_name = 'tuner007/pegasus_paraphrase'
+torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+tokenizer = PegasusTokenizer.from_pretrained(model_name)
+model = PegasusForConditionalGeneration.from_pretrained(model_name).to(torch_device)
+
+def get_paraphrase_response(input_text,num_return_sequences,num_beams):
+  input_len=len(input_text.split())
+  print(input_len,"---------->")
+  mx_len=min(input_len+10,70)
+  batch = tokenizer([input_text],truncation=True,padding='longest',max_length=mx_len, return_tensors="pt").to(torch_device)
+  translated = model.generate(**batch,max_length=mx_len,num_beams=num_beams, num_return_sequences=num_return_sequences, temperature=1.5)
+  tgt_text = tokenizer.batch_decode(translated, skip_special_tokens=True)
+  return tgt_text
+
+@app.route('/paraphrase',methods=['POST'])
+def paraphrase_text():
+    try:
+        text=''
+        num_return_sequences=1
+        print("entered to paraphrase")
+        input_type=request.form['input_type']
+        
+        if(input_type=='text'):
+            text=request.form['input_text']
+            print(len(text.split()))
+            num_return_sequences = 6
+
+        else:
+            input_file=request.files['input_document']
+            text=extract_text_from_pdfplumber(input_file)
+        print(text)
+        num_beams = 40
+        
+        results=get_paraphrase_response(text,num_return_sequences,num_beams)
+        print(results)
+
+        return jsonify({'paraphrased_text':results})
+
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -187,6 +254,7 @@ def detect_text(image_blob):
 def ocr():
     try:
         if 'image' in request.files:
+            print('entered')
             # Handle image file
             image_blob = request.files['image'].read()
             ocr_result = detect_text(image_blob)
