@@ -276,7 +276,7 @@ def ocr():
 def math_exp_solve():
     try:
         prompt = request.form['prompt']
-        prompt +=  "\n### Make sure to give me output in HTML format but not in markdown format ###"
+        prompt +=  "You're a mathematical problem solving expert who can solve any mathematical problem, solve the above given mathematical expression in a correct way by thinking step-by-step\n### Make sure to give me output in HTML format but not in markdown format the output should contain only the solving steps.###"
         response = gemmodel.generate_content(prompt)
         resp = response.text.replace("\n", '')
         return jsonify({'gem_response': resp})        
