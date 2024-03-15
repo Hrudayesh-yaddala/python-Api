@@ -9,10 +9,14 @@ import fitz
 import torch
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 import google.generativeai as genai
-
+import os
+from dotenv import load_dotenv
 from IPython.display import display
 from IPython.display import Markdown
 import textwrap3
+
+load_dotenv()
+
 
 
 app = Flask(__name__)
@@ -20,7 +24,7 @@ CORS(app)
 aai.settings.api_key = "44527a6a3d1e42c38a3d7dc6d7dc8cf3"
 API = "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"
 
-GOOGLE='AIzaSyDV3rAW4og5T2CU0IS63ohCAY3nK2MhQbA'
+GOOGLE=os.getenv('GOOGLE_API')
 genai.configure(api_key=GOOGLE)
 gemmodel = genai.GenerativeModel('gemini-pro')
 
@@ -197,68 +201,9 @@ def paraphrase_text():
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# @app.route('/AI-API/text-summarization', methods=['POST'])
-# def summarize_document():
-#     try:
-#         results = []
-#         _input = request.form.getlist('input_content')
-#         if  request.form['document_type'] == "text":
-#             document_type = "large"
-#             if len(_input[0]) > 4000:
-#                 text_chunks = divide_text(_input[0])
-#                 result=""
-#                 for chunk in text_chunks:
-#                     result += summarize_document_with_retry(chunk, document_type,API)
-#                 results.append(result)
-#             else:
-#                 result = summarize_document_with_retry(_input[0], document_type,API)
-#                 results.append(result)
-#         else:
-#             _files = request.files.getlist('pdf')
-#             _files += request.files.getlist('docx')
-#             _types = request.form.getlist('document_type')
-            
-#             for pdf_file, document_type in zip(_files, _types):
-#                 extracted_text = extracted_data(pdf_file)
-#                 if len(extracted_text) > 4000:
-#                     text_chunks = divide_text(extracted_text)
-#                     result = ""
-#                     for chunk in text_chunks:
-#                         result += summarize_document_with_retry(chunk, document_type,API)
-#                     results.append(result)
-#                 else:
-#                     result = summarize_document_with_retry(extracted_text, document_type,API)
-#                     results.append(result)
-#         cleaned_result = []
-#         for i in results:
-#             x = []
-#             x.append(clean_text(i))
-#             cleaned_result.append(x)
-#         return jsonify({'results': cleaned_result})
-#     except Exception as e:
-#         return jsonify({'error': str(e)}), 500
-    
-
-
-
 # from flask import Flask, request, jsonify
 from google.cloud import vision
-# import fitz
+import fitz
 import os
 import math
 from collections import Counter
@@ -294,9 +239,10 @@ def ocr():
             # Handle image file
             image_blob = request.files['image'].read()
             ocr_result = detect_text(image_blob)
-            return jsonify({'ocr_text': ocr_result[0]})
+            return jsonify({'ocr_texts': ocr_result[0]})
         
         elif 'pdf' in request.files:
+            ocr_texts=''
             # Handle PDF file
             pdf_blob = request.files['pdf'].read()
             images = []
@@ -306,9 +252,16 @@ def ocr():
                     # Convert PDF page to image blob
                     image_bytes = page.get_pixmap().tobytes()
                     images.append(image_bytes)
-            
+                        
             # Process OCR for each image blob
-            ocr_texts = [detect_text(image) for image in images]
+            # ocr_texts = [detect_text(image) for image in images]
+            # print(ocr_texts)
+            for image in images:
+                ocr_texts+=detect_text(image)[0]+" "
+
+            print(ocr_texts)
+
+            
             return jsonify({'ocr_texts': ocr_texts})
         
         else:
