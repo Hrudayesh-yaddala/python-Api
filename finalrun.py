@@ -5,14 +5,29 @@ import pdfplumber
 from gtts import gTTS
 # from summarydepend import *;
 from translate import Translator
-# import fitz
+import fitz
 import torch
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
+import google.generativeai as genai
+
+from IPython.display import display
+from IPython.display import Markdown
+import textwrap3
+
 
 app = Flask(__name__)
 CORS(app)
 aai.settings.api_key = "44527a6a3d1e42c38a3d7dc6d7dc8cf3"
 API = "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"
+
+GOOGLE='AIzaSyDV3rAW4og5T2CU0IS63ohCAY3nK2MhQbA'
+genai.configure(api_key=GOOGLE)
+gemmodel = genai.GenerativeModel('gemini-pro')
+
+model_name = 'tuner007/pegasus_paraphrase'
+torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+tokenizer = PegasusTokenizer.from_pretrained(model_name)
+model = PegasusForConditionalGeneration.from_pretrained(model_name).to(torch_device)
 
 @app.route('/', methods=['GET'])
 def getrequest():
@@ -109,32 +124,53 @@ def translate_text():
         return jsonify({'error': str(e)}), 500
 
 
-model_name = 'tuner007/pegasus_paraphrase'
-torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-tokenizer = PegasusTokenizer.from_pretrained(model_name)
-model = PegasusForConditionalGeneration.from_pretrained(model_name).to(torch_device)
 
-def get_paraphrase_response(input_text,num_return_sequences,num_beams):
-  input_len=len(input_text.split())
-  print(input_len,"---------->")
-  mx_len=min(input_len+10,70)
-  batch = tokenizer([input_text],truncation=True,padding='longest',max_length=mx_len, return_tensors="pt").to(torch_device)
-  translated = model.generate(**batch,max_length=mx_len,num_beams=num_beams, num_return_sequences=num_return_sequences, temperature=1.5)
-  tgt_text = tokenizer.batch_decode(translated, skip_special_tokens=True)
-  return tgt_text
+
+def get_paraphrase_response(input_text, num_return_sequences, num_beams):
+    max_chunk = 60
+    input_text = input_text.replace('\n', " ")
+    input_text = input_text.replace('.', '.<eos>')
+    input_text = input_text.replace('?', '?<eos>')
+    input_text = input_text.replace('!', '!<eos>')
+    sentences = input_text.split('<eos>')
+    current_chunk = 0
+    chunks = []
+    for sentence in sentences:
+        if len(chunks) == current_chunk + 1:
+            if len(chunks[current_chunk]) + len(sentence.split(' ')) <= max_chunk:
+                chunks[current_chunk].extend(sentence.split(' '))
+            else:
+                current_chunk += 1
+                chunks.append(sentence.split(' '))
+        else:
+            chunks.append(sentence.split(' '))
+    print(chunks, len(chunks))
+    output_chunks = []
+    for chunk_id in range(len(chunks)):
+        chunk_text = ' '.join(chunks[chunk_id])
+        # print(chunk_text)s
+        batch = tokenizer([chunk_text], truncation=True, padding='longest', max_length=60, return_tensors="pt").to(torch_device)
+        translated = model.generate(**batch, max_length=60, num_beams=num_beams, num_return_sequences=num_return_sequences, temperature=1.5)
+        tgt_text = tokenizer.batch_decode(translated, skip_special_tokens=True)
+        print(tgt_text)
+        output_chunks.append(tgt_text[0])
+    print(len(output_chunks))
+    final_output = ' '.join(output_chunks)
+    return [final_output]
+
 
 @app.route('/paraphrase',methods=['POST'])
+
 def paraphrase_text():
     try:
         text=''
         num_return_sequences=1
         print("entered to paraphrase")
         input_type=request.form['input_type']
-        
-        if(input_type=='text'):
+        if(input_type =="text"):
             text=request.form['input_text']
             print(len(text.split()))
-            num_return_sequences = 6
+            # num_return_sequences = 6
 
         else:
             input_file=request.files['input_document']
@@ -278,6 +314,19 @@ def ocr():
         else:
             return jsonify({'error': 'No supported file part in the request.'}), 400
     
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+
+@app.route('/math_exp_solve', methods=['POST'])
+def math_exp_solve():
+    try:
+        prompt = request.form['prompt']
+        prompt +=  "\n### Make sure to give me output in HTML format but not in markdown format ###"
+        response = gemmodel.generate_content(prompt)
+        resp = response.text.replace("\n", '')
+        return jsonify({'gem_response': resp})        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         

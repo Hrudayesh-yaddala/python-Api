@@ -4,3 +4,8 @@ Flask-Cors==4.0.0
 google-cloud-vision==3.7.0
 translate==3.6.1
 PyMuPDF==1.23.26
+transformers==4.38.2
+sentencepiece==0.2.0
+ipython==0.2.0
+google-generativeai==0.4.1
+textwrap3==0.9.2
