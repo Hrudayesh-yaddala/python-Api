@@ -10,12 +10,13 @@ import torch
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 import google.generativeai as genai
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from IPython.display import display
 from IPython.display import Markdown
 import textwrap3
+from PIL import Image
 
-load_dotenv()
+# load_dotenv()
 
 
 
@@ -24,7 +25,7 @@ CORS(app)
 aai.settings.api_key = "44527a6a3d1e42c38a3d7dc6d7dc8cf3"
 API = "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"
 
-GOOGLE=os.getenv('GOOGLE_API')
+GOOGLE='AIzaSyDV3rAW4og5T2CU0IS63ohCAY3nK2MhQbA'
 genai.configure(api_key=GOOGLE)
 gemmodel = genai.GenerativeModel('gemini-pro')
 
@@ -282,6 +283,32 @@ def math_exp_solve():
         return jsonify({'gem_response': resp})        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route("/generate_handwritten_image", methods=["POST"])
+def generate_handwritten_image():
+    # Get the text from the form data
+    text = request.form.get("text")
+
+    # Path of page (background) photo (I have used a blank page)
+    BG = Image.open("font/bg.png")
+    sheet_width = BG.width
+    gap, ht = 0, 0
+
+    for char in text.replace('\n', ' '):
+        cases = Image.open('font/{}.png'.format(str(ord(char))))
+        BG.paste(cases, (gap, ht))
+        size = cases.width
+        height = cases.height
+        gap += size
+        if sheet_width < gap or len(char) * 115 > (sheet_width - gap):
+            gap, ht = 0, ht + 140
+
+    # Save the image
+    handwritten_image_path = "handwritten_text.png"
+    BG.save(handwritten_image_path)
+
+    # Send the image as a response
+    return send_file(handwritten_image_path, mimetype='image/png')
         
 
 # if _name_ == '_main_':
