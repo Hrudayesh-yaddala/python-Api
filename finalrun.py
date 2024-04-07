@@ -16,6 +16,12 @@ from IPython.display import Markdown
 import textwrap3
 from PIL import Image
 
+from pdf2docx import Converter
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from pathlib import Path
+
+
 # load_dotenv()
 
 
@@ -79,11 +85,13 @@ def voiceGeneration():
     try:
         print("entered to module")
         input_type = request.form['input_type']
+        target_lang=request.form['input_language']
+        print('**********',target_lang)
         print(input_type)
         if input_type == 'text':
             inp_text = request.form['input_text']
             print(inp_text)
-            text_to_speech(inp_text, 'en', 'testing-speech.wav')
+            text_to_speech(inp_text, target_lang, 'testing-speech.wav')
         else:
             input_file = request.files['input_document']
             extracted_text = extract_text_from_pdfplumber(input_file)
@@ -155,13 +163,14 @@ def get_paraphrase_response(input_text, num_return_sequences, num_beams):
         chunk_text = ' '.join(chunks[chunk_id])
         # print(chunk_text)s
         batch = tokenizer([chunk_text], truncation=True, padding='longest', max_length=60, return_tensors="pt").to(torch_device)
-        translated = model.generate(**batch, max_length=60, num_beams=num_beams, num_return_sequences=num_return_sequences, temperature=1.5)
+        translated = model.generate(**batch, max_length=60, num_beams=num_beams, num_return_sequences=5, temperature=1.5)
         tgt_text = tokenizer.batch_decode(translated, skip_special_tokens=True)
         print(tgt_text)
-        output_chunks.append(tgt_text[0])
-    print(len(output_chunks))
-    final_output = ' '.join(output_chunks)
-    return [final_output]
+    #     output_chunks.append(tgt_text[0])
+    # print(len(output_chunks))
+    # final_output = ' '.join(output_chunks)
+    # return [final_output]
+    return tgt_text
 
 
 @app.route('/paraphrase',methods=['POST'])
@@ -169,7 +178,7 @@ def get_paraphrase_response(input_text, num_return_sequences, num_beams):
 def paraphrase_text():
     try:
         text=''
-        num_return_sequences=1
+        num_return_sequences=5
         print("entered to paraphrase")
         input_type=request.form['input_type']
         if(input_type =="text"):
@@ -277,9 +286,13 @@ def ocr():
 def math_exp_solve():
     try:
         prompt = request.form['prompt']
-        prompt +=  "You're a mathematical problem solving expert who can solve any mathematical problem, solve the above given mathematical expression in a correct way by thinking step-by-step\n### Make sure to give me output in HTML format but not in markdown format the output should contain only the solving steps.###"
+        if(prompt.isalpha()):
+            raise Exception('Text is not accepted')
+        print(prompt)
+        prompt +=  " You're a mathematical problem solving expert who can solve any mathematical problem, solve the above given mathematical expression in a correct way by thinking step-by-step\n### Make sure to give me output in HTML format but not in markdown format the output should contain only the solving steps.###"
         response = gemmodel.generate_content(prompt)
         resp = response.text.replace("\n", '')
+        # print(resp)
         return jsonify({'gem_response': resp})        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -288,7 +301,7 @@ def math_exp_solve():
 def generate_handwritten_image():
     # Get the text from the form data
     text = request.form.get("text")
-
+    print(text)
     # Path of page (background) photo (I have used a blank page)
     BG = Image.open("font/bg.png")
     sheet_width = BG.width
@@ -310,6 +323,90 @@ def generate_handwritten_image():
     # Send the image as a response
     return send_file(handwritten_image_path, mimetype='image/png')
         
+
+
+# Function to convert PDF to DOCX
+def convert_pdf_to_docx(input_pdf_file, output_docx_file):
+    try:
+        cv = Converter(input_pdf_file)
+        cv.convert(output_docx_file, start=0, end=None)
+        cv.close()
+        return True
+    except Exception as e:
+        print(f"Error converting PDF to DOCX: {e}")
+        return False
+
+# Function to convert DOCX to PDF
+def convert_docx_to_pdf(input_docx_file, output_pdf_file):
+    try:
+        cv = Converter(input_docx_file)
+        cv.convert(output_pdf_file, start=0, end=None)
+        cv.close()
+        return True
+    except Exception as e:
+        print(f"Error converting DOCX to PDF: {e}")
+        return False
+
+# Function to convert text to PDF
+def convert_text_to_pdf(input_text, output_pdf_file):
+    try:
+        with open(output_pdf_file, 'wb') as pdf_file:
+            pdf = canvas.Canvas(pdf_file, pagesize=letter)
+            pdf.drawString(100, 750, input_text)
+            pdf.save()
+        return True
+    except Exception as e:
+        print(f"Error converting text to PDF: {e}")
+        return False
+
+@app.route('/file-conversion', methods=['POST'])
+def convert_files():
+    input_type = request.form.get('input_type')
+    input_file = request.files.get('input_document')
+    print(input_type)
+    print(input_file)
+    if not input_type or not input_file:
+        return 'Missing input_type or input_document', 400
+
+    try:
+        if input_type == 'pdftodoc':
+            if input_file.filename.endswith('.pdf'):
+                input_pdf_path = Path('temp.pdf')
+                input_file.save(input_pdf_path)
+                output_docx_path = Path('output.docx')
+                if convert_pdf_to_docx(input_pdf_path, output_docx_path):
+                    print("success")
+                    return send_file(output_docx_path, as_attachment=True)
+                else:
+                    return 'Conversion failed', 500
+            else:
+                return 'Invalid file format, only PDF files are supported', 400
+
+        elif input_type == 'doctopdf':
+            if input_file.filename.endswith('.docx'):
+                input_docx_path = Path('temp.docx')
+                input_file.save(input_docx_path)
+                output_pdf_path = Path('output.pdf')
+                if convert_docx_to_pdf(input_docx_path, output_pdf_path):
+                    return send_file(output_pdf_path, as_attachment=True)
+                else:
+                    return 'Conversion failed', 500
+            else:
+                return 'Invalid file format, only DOCX files are supported', 400
+
+        elif input_type == 'txttopdf':
+            input_text = input_file.read().decode('utf-8')
+            output_pdf_path = Path('output.pdf')
+            if convert_text_to_pdf(input_text, output_pdf_path):
+                return send_file(output_pdf_path, as_attachment=True)
+            else:
+                return 'Conversion failed', 500
+
+        else:
+            return 'Invalid input_type', 400
+
+    except Exception as e:
+        return f"An error occurred: {e}", 500
 
 # if _name_ == '_main_':
 #     app.run(debug=True, port=6000)
